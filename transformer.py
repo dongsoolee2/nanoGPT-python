@@ -8,12 +8,12 @@ block_size = 256
 max_iters = 5000
 eval_interval = 500
 learning_rate = 3e-4
-device = 'cuda' if torch.cuda.is_available() else 'mps'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
-n_embd = 84
+n_embd = 384
 n_head = 6
 n_layer = 6
-dropout = 0.2
+dropout = 0.1
 
 torch.manual_seed(1337)
 
@@ -56,6 +56,7 @@ def estimate_loss():
     model.train()
     return out
 
+
 class Head(nn.Module):
     """ one head of self-attention """
      
@@ -71,14 +72,14 @@ class Head(nn.Module):
         B, T, C = x.shape
         k = self.key(x)    # (B, T, C)
         q = self.query(x)  # (B, T, C)
-        wei = q @ k.transpose(-2, -1) * C ** -0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
+        wei = q @ k.transpose(-2, -1) * C**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-Inf')) # (B, T, T)
         wei = F.softmax(wei, dim=-1) # (B, T, T)
         wei = self.dropout(wei)
         v = self.value(x) # (B, T, C)
         out = wei @ v # (B, T, T) @ (B, T, C) -> (B, T, C)
         return out
-    
+
     
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
@@ -94,7 +95,7 @@ class MultiHeadAttention(nn.Module):
         out = self.dropout(self.proj(out))
         return out
 
-    
+
 class FeedForward(nn.Module):
     """ a simple linear layer followed by a non-nonlinearity """
     
@@ -106,11 +107,11 @@ class FeedForward(nn.Module):
             nn.Linear(4 * n_embd, n_embd),
             nn.Dropout(dropout),
         )
-        
+
     def forward(self, x):
         return self.net(x)
-    
-    
+
+
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
     
@@ -121,14 +122,14 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embd)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
-        
+
     def forward(self, x):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
-    
-class BigramLanguageModel(nn.Module):
-    
+
+class TransformerLanguageModel(nn.Module):
+
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
@@ -146,7 +147,7 @@ class BigramLanguageModel(nn.Module):
         self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
-        
+
     def forward(self, idx, targets=None):
         B, T = idx.shape
         
@@ -166,7 +167,6 @@ class BigramLanguageModel(nn.Module):
             logits = logits.view(B*T, C)
             targets = targets.view(B*T)
             loss = F.cross_entropy(logits, targets)
-            
         return logits, loss
     
     def generate(self, idx, max_new_tokens):
@@ -179,7 +179,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
     
-model = BigramLanguageModel()
+model = TransformerLanguageModel()
 m = model.to(device)
 
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
@@ -198,4 +198,10 @@ for iter in range(max_iters):
     optimizer.step()
 
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+response = decode(m.generate(context, max_new_tokens=1000)[0].tolist())
+
+
+import datetime
+with open(f"out-{datetime.datetime.now().replace(microsecond=0).isoformat()}.txt", "w") as output:
+    output.write(response)
+print(response)
