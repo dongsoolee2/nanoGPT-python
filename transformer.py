@@ -7,13 +7,13 @@ batch_size = 64
 block_size = 256
 max_iters = 5000
 eval_interval = 500
-learning_rate = 3e-4
+learning_rate = 3e-4 #1e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 384
 n_head = 6
 n_layer = 6
-dropout = 0.1
+dropout = 0.25
 
 torch.manual_seed(1337)
 
@@ -59,7 +59,6 @@ def estimate_loss():
 
 class Head(nn.Module):
     """ one head of self-attention """
-     
     def  __init__(self, head_size):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
@@ -83,7 +82,6 @@ class Head(nn.Module):
     
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
-    
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
@@ -98,7 +96,6 @@ class MultiHeadAttention(nn.Module):
 
 class FeedForward(nn.Module):
     """ a simple linear layer followed by a non-nonlinearity """
-    
     def __init__(self, n_embd):
         super().__init__()
         self.net = nn.Sequential(
@@ -114,7 +111,6 @@ class FeedForward(nn.Module):
 
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
-    
     def __init__(self, n_embd, n_head):
         super().__init__()
         head_size = n_embd // n_head
@@ -129,7 +125,6 @@ class Block(nn.Module):
         return x
 
 class TransformerLanguageModel(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
@@ -150,7 +145,6 @@ class TransformerLanguageModel(nn.Module):
 
     def forward(self, idx, targets=None):
         B, T = idx.shape
-        
         tok_emb = self.token_embedding_table(idx)  # B(batch), T(Block), C
         pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, C)
         x = tok_emb + pos_emb # (B, T, C)
@@ -179,6 +173,7 @@ class TransformerLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
     
+
 model = TransformerLanguageModel()
 m = model.to(device)
 
@@ -200,8 +195,6 @@ for iter in range(max_iters):
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 response = decode(m.generate(context, max_new_tokens=1000)[0].tolist())
 
-
-import datetime
-with open(f"out-{datetime.datetime.now().replace(microsecond=0).isoformat()}.txt", "w") as output:
+with open(f"output-val_loss_{losses['val']:.4f}.txt", "w") as output:
     output.write(response)
 print(response)

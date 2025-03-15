@@ -1,6 +1,8 @@
 __pycache__
+.ipynb
 .ipynb_checkpoints
 .env
 .venv
 venv/
+output-*.txt
 .DS_Store
