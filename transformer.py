@@ -1,19 +1,22 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import torch._inductor.config
+
+torch._inductor.config.cpp.cxx = ("g++",)
 
 # hyperparameters
 batch_size = 64
 block_size = 256
-max_iters = 5000
-eval_interval = 500
-learning_rate = 3e-4 #1e-4
+max_iters = 6300 #5000
+eval_interval = 450 #500
+learning_rate = 2e-4 #1e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 384
 n_head = 6
 n_layer = 6
-dropout = 0.25
+dropout = 0.20
 
 torch.manual_seed(1337)
 
@@ -175,14 +178,17 @@ class TransformerLanguageModel(nn.Module):
     
 
 model = TransformerLanguageModel()
+model = torch.compile(model)
 m = model.to(device)
 
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
 
+min_loss = float('inf')
 for iter in range(max_iters):
     
-    if iter % eval_interval == 0:
+    if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
+        min_loss = min(min_loss, losses['val'])
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         
     xb, yb = get_batch('train')
@@ -195,6 +201,7 @@ for iter in range(max_iters):
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 response = decode(m.generate(context, max_new_tokens=1000)[0].tolist())
 
+print(min_loss)
 with open(f"output-val_loss_{losses['val']:.4f}.txt", "w") as output:
     output.write(response)
 print(response)
